@@ -81,3 +81,57 @@ if [ "$RIRU_API" -lt 11 ]; then
 fi
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
+
+CONFIG_PATH="/data/misc/mph/config"
+
+if [ !-d /data/misc/mph ]
+then
+  rm -rf /data/misc/mph
+  mkdir /data/misc/mph
+fi
+
+if [ ! -d "$CONFIG_PATH/properties" ]; then
+    ui_print "- Creating default configuration (1)"
+    mkdir -p "$CONFIG_PATH/properties"
+    echo -n "V12" > "$CONFIG_PATH/properties/ro.miui.ui.version.name"
+    echo -n "10" > "$CONFIG_PATH/properties/ro.miui.ui.version.code"
+    echo -n "1592409600" > "$CONFIG_PATH/properties/ro.miui.version.code_time"
+    echo -n "/sdcard/" > "$CONFIG_PATH/properties/ro.miui.internal.storage"
+    echo -n "Xiaomi" > "$CONFIG_PATH/properties/ro.product.manufacturer"
+    echo -n "Xiaomi" > "$CONFIG_PATH/properties/ro.product.brand"
+    echo -n "Xiaomi" > "$CONFIG_PATH/properties/ro.product.name"
+    echo -n "Xiaomi" > "$CONFIG_PATH/properties/ro.product.vendor.brand"
+fi
+
+if [ ! -d "$CONFIG_PATH/packages" ]; then
+    ui_print "- Creating default configuration (2)"
+    mkdir -p "$CONFIG_PATH/packages"
+    touch "$CONFIG_PATH/packages/cmb.pb"
+    touch "$CONFIG_PATH/packages/cn.adidas.app"
+    touch "$CONFIG_PATH/packages/com.autonavi.minimap"
+    touch "$CONFIG_PATH/packages/com.coolapk.market"
+    touch "$CONFIG_PATH/packages/com.dianping.v1"
+    touch "$CONFIG_PATH/packages/com.eastmoney.android.fund"
+    touch "$CONFIG_PATH/packages/com.eg.android.AlipayGphone"
+    touch "$CONFIG_PATH/packages/com.huami.watch.hmwatchmanager"
+    touch "$CONFIG_PATH/packages/com.icbc"
+    touch "$CONFIG_PATH/packages/com.sankuai.meituan"
+    touch "$CONFIG_PATH/packages/com.smzdm.client.android"
+    touch "$CONFIG_PATH/packages/com.starbucks.cn"
+    touch "$CONFIG_PATH/packages/com.taobao.idlefish"
+    touch "$CONFIG_PATH/packages/com.taobao.taobao"
+    touch "$CONFIG_PATH/packages/com.tencent.weread"
+    touch "$CONFIG_PATH/packages/com.tigerbrokers.stock"
+    touch "$CONFIG_PATH/packages/com.wudaokou.hippo"
+    touch "$CONFIG_PATH/packages/com.xes.jazhanghui.activity"
+    touch "$CONFIG_PATH/packages/com.xiaomi.hm.health"
+    touch "$CONFIG_PATH/packages/com.xiaomi.smarthome"
+    touch "$CONFIG_PATH/packages/com.xiaomi.wearable"
+    touch "$CONFIG_PATH/packages/com.ximalaya.ting.android"
+    touch "$CONFIG_PATH/packages/cool.dingstock.mobile"
+    touch "$CONFIG_PATH/packages/me.ele"
+    touch "$CONFIG_PATH/packages/org.xinkb.blackboard.android"
+fi
+
+set_perm_recursive /data/misc/mph 0 0 0755 0644
+chcon -R u:object_r:magisk_file:s0 /data/misc/mph

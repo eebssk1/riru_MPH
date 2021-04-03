@@ -29,6 +29,7 @@ android {
 
 repositories {
     mavenLocal()
+    maven { url 'https://dl.bintray.com/rikkaw/Libraries' }
 }
 
 dependencies {
@@ -41,6 +42,7 @@ dependencies {
     // See https://github.com/google/prefab/issues/122
 
     implementation 'dev.rikka.ndk:riru:25.0.0'
+    implementation 'rikka.ndk.thirdparty:nativehelper:20201111'
 }
 
 def magiskDir = file("$outDir/magisk_module")

@@ -1,0 +1,2 @@
+allow coredomain coredomain process { execmem }
+allow coredomain app_data_file * *
