@@ -1,0 +1,28 @@
+ext {
+    /*
+       This name will be used in the name of the so file ("lib${moduleLibraryName}.so").
+       If this module need to support Riru pre-v24 (API < 24), moduleLibraryName must start with "riru_".
+    */
+    moduleLibraryName = "riru_mph"
+
+    /* Minimal supported Riru API version, used in the version check of riru.sh */
+    moduleMinRiruApiVersion = 9
+
+    /* The version name of minimal supported Riru, used in the version check of riru.sh */
+    moduleMinRiruVersionName = "v22.0"
+
+    /* Maximum supported Riru API version, used in the version check of riru.sh */
+    moduleRiruApiVersion = 25
+
+    /*
+       Magisk module ID
+       Since Magisk use it to distinguish different modules, you should never change it.
+    */
+    magiskModuleId = "riru_mph"
+
+    moduleName = "mph"
+    moduleAuthor = "idiot"
+    moduleDescription = "mph by idiot. This modules requires Riru $moduleMinRiruVersionName or above."
+    moduleVersion = "v25.0.0"
+    moduleVersionCode = 25
+}
