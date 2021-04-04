@@ -17,30 +17,6 @@
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 
-namespace android {
-
-    static int apiLevel = 0;
-    static int previewApiLevel = 0;
-
-    int GetApiLevel() {
-        if (UNLIKELY(apiLevel > 0)) return apiLevel;
-        char buf[PROP_VALUE_MAX + 1];
-        if (LIKELY(__system_property_get("ro.build.version.sdk", buf)) > 0)
-            apiLevel = atoi(buf);
-        return apiLevel;
-    }
-
-    int GetPreviewApiLevel() {
-        if (previewApiLevel > 0) return previewApiLevel;
-
-        char buf[PROP_VALUE_MAX + 1];
-        if (__system_property_get("ro.build.version.preview_sdk", buf) > 0)
-            previewApiLevel = atoi(buf);
-
-        return previewApiLevel;
-    }
-}
-
 namespace Config {
     int foreach_dir(const char *path, void(*callback)(int, struct dirent *)) {
         DIR *dir;
@@ -62,8 +38,9 @@ namespace Config {
     struct Property {
         std::string name;
         std::string value;
+        unsigned ser;
 
-        Property(const char *name, const char *value) : name(name), value(value) {}
+        Property(const char *name, const char *value,unsigned ser) : name(name), value(value), ser(ser) {}
     };
 
     namespace Properties {
@@ -83,6 +60,7 @@ namespace Config {
 
     static std::map<std::string, Property *> props;
     static std::vector<std::string> packages;
+    static int serm = 10086;
 
     Property *Properties::Find(const char *name) {
         if (UNLIKELY(!name)) return nullptr;
@@ -97,8 +75,7 @@ namespace Config {
         if (!name) return;
         auto prop = Find(name);
         delete prop;
-        props[name] = new Property(name, value ? value : "");
-        LOGV("property: %s %s", name, value);
+        props[name] = new Property(name, value ? value : "",serm++);
     }
 
     bool Packages::Find(const char *name) {
@@ -109,7 +86,6 @@ namespace Config {
     void Packages::Add(const char *name) {
         if (!name) return;
         packages.emplace_back(name);
-        LOGV("package: %s", name);
     }
 
     void Load() {
@@ -120,6 +96,7 @@ namespace Config {
             char buf[PROP_VALUE_MAX]{0};
             if (LIKELY(read(fd, buf, PROP_VALUE_MAX)) >= 0) {
                 Properties::Put(name, buf);
+                LOGV("add prop %s as %s", name, buf);
             }
             close(fd);
         });
@@ -130,57 +107,83 @@ namespace Config {
         });
         if (packages.empty())
             LOGI("hook target package list is empty");
-        LOGI("hook target package list loadded");
+        if (props.empty())
+            LOGI("hook prop list is empty");
+        LOGI("hook target package and prop list loadded");
     }
 }
 namespace Hook {
-    static int (*orig__system_property_get)(const char *key, char *value);
 
-    static int my__system_property_get(const char *key, char *value) {
-        int res = orig__system_property_get(key, value);
-        auto prop = Config::Properties::Find(key);
-        if (LIKELY(prop)) {
-            LOGV("system_property_get: %s=%s -> %s", key, value, prop->value.c_str());
-            strcpy(value, prop->value.c_str());
+    struct prop_info_compat {
+        char name[128];
+        unsigned volatile serial;
+        char value[PROP_VALUE_MAX];
+    } prop_info_compat;
+
+
+    prop_info *(*orig__system_property_find)(const char *name);
+
+    prop_info *my__system_property_find(const char *name) {
+        char mname[128] = {0};
+        strcpy(mname,name);
+        auto prop = Config::Properties::Find(mname);
+        if(UNLIKELY(prop)){
+            auto *mpi = (struct prop_info_compat *)malloc(sizeof(prop_info_compat));
+            strcpy(mpi->name,mname);
+            strcpy(mpi->value,prop->value.c_str());
+            mpi->serial = prop->ser;
+            return reinterpret_cast<prop_info *>(mpi);
         }
-        return res;
+        else{
+            return orig__system_property_find(name);
+        }
     }
+/*
+    using callback_func = void(void *cookie, const char *name, const char *value, uint32_t serial);
+    thread_local callback_func *saved_callback = nullptr;
 
-    using callback_func = void(void *cookie, const char *name, const char *value,
-                               uint32_t serial);
-    static thread_local callback_func *saved_callback = nullptr;
-
-    static void
-    my_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
+    static void my_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
         if (!saved_callback) return;
-        auto prop = Config::Properties::Find(name);
-        if (LIKELY(!prop)) {
-            saved_callback(cookie, name, value, serial);
-            return;
+        LOGV("accessing prop %s as %s",name,value);
+        LOGV("savename is %s",saved_name);
+        if (UNLIKELY(strcmp(name,stubname))) {
+            if (LIKELY(!strcmp(saved_name, "nope"))) {
+                auto prop = Config::Properties::Find(saved_name);
+                if (LIKELY(prop)) {
+                    LOGV("replace prop %s from %s to %s",name,value,prop->value.c_str());
+                    return saved_callback(cookie, name, prop->value.c_str(), serial);
+                } else {
+                    return saved_callback(cookie, name, value, serial);
+                }
+            } else {
+                return saved_callback(cookie, name, value, serial);
+            }
+        } else {
+            return saved_callback(cookie, name, value, serial);
         }
-        LOGV("system_property_read_callback: %s=%s -> %s", name, value, prop->value.c_str());
-        saved_callback(cookie, name, prop->value.c_str(), serial);
     }
 
-    static void
-    (*orig__system_property_read_callback)(const prop_info *pi, callback_func *callback,
-                                           void *cookie);
+    void (*orig__system_property_read_callback)(const prop_info *pi, callback_func *callback,
+                                                void *cookie);
 
-    static void my__system_property_read_callback(const prop_info *pi, callback_func *callback,
-                                                  void *cookie) {
+    void
+    my__system_property_read_callback(const prop_info *pi, callback_func *callback, void *cookie) {
         saved_callback = callback;
         orig__system_property_read_callback(pi, my_callback, cookie);
     }
-
-    void InstallHook() {
-        DobbyHook((void *) &__system_property_get, (void *) my__system_property_get,
-                  (void **) &orig__system_property_get);
-        if (LIKELY(android::GetApiLevel() >= 26)) {
-            DobbyHook((void *) &__system_property_read_callback,
-                      (void *) my__system_property_read_callback,
-                      (void **) &orig__system_property_read_callback);
-        }
-
+*/
+    static void InstallHook() {
+        LOGV("Installing Hook");
+        int res;
+        res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_find"),
+                        (void *) my__system_property_find, (void **) &orig__system_property_find);
+        LOGV("Hook return %d", res);
+        /*
+        res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_read_callback"),
+                        (void *) my__system_property_read_callback,
+                        (void **) &orig__system_property_read_callback);
+        LOGV("Hook return %d", res);
+         */
     }
 }
 
