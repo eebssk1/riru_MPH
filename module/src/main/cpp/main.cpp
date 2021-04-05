@@ -17,8 +17,26 @@
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 
+namespace android {
+
+    static int apiLevel = 0;
+
+    static int GetApiLevel() {
+        if (apiLevel > 0) return apiLevel;
+
+        char buf[PROP_VALUE_MAX + 1];
+        if (__system_property_get("ro.build.version.sdk", buf) > 0)
+            apiLevel = strtol(buf,nullptr,10);
+        if(UNLIKELY(apiLevel == 0))
+            //Assume android oreo+ if any problem
+            apiLevel = 26;
+
+        return apiLevel;
+    }
+}
+
 namespace Config {
-    int foreach_dir(const char *path, void(*callback)(int, struct dirent *)) {
+    static int foreach_dir(const char *path, void(*callback)(int, struct dirent *)) {
         DIR *dir;
         struct dirent *entry;
         int fd;
@@ -44,14 +62,14 @@ namespace Config {
     };
 
     namespace Properties {
-        Property *Find(const char *name);
+        static Property *Find(const char *name);
 
-        void Put(const char *name, const char *value);
+        static void Put(const char *name, const char *value);
     }
     namespace Packages {
-        bool Find(const char *name);
+        static bool Find(const char *name);
 
-        void Add(const char *name);
+        static void Add(const char *name);
     }
 
 #define CONFIG_PATH "/data/misc/mph/config"
@@ -88,7 +106,7 @@ namespace Config {
         packages.emplace_back(name);
     }
 
-    void Load() {
+    static void Load() {
         foreach_dir(PROPS_PATH, [](int dirfd, struct dirent *entry) {
             auto name = entry->d_name;
             int fd = openat(dirfd, name, O_RDONLY);
@@ -138,52 +156,29 @@ namespace Hook {
             return orig__system_property_find(name);
         }
     }
-/*
-    using callback_func = void(void *cookie, const char *name, const char *value, uint32_t serial);
-    thread_local callback_func *saved_callback = nullptr;
 
-    static void my_callback(void *cookie, const char *name, const char *value, uint32_t serial) {
-        if (!saved_callback) return;
-        LOGV("accessing prop %s as %s",name,value);
-        LOGV("savename is %s",saved_name);
-        if (UNLIKELY(strcmp(name,stubname))) {
-            if (LIKELY(!strcmp(saved_name, "nope"))) {
-                auto prop = Config::Properties::Find(saved_name);
-                if (LIKELY(prop)) {
-                    LOGV("replace prop %s from %s to %s",name,value,prop->value.c_str());
-                    return saved_callback(cookie, name, prop->value.c_str(), serial);
-                } else {
-                    return saved_callback(cookie, name, value, serial);
-                }
-            } else {
-                return saved_callback(cookie, name, value, serial);
-            }
-        } else {
-            return saved_callback(cookie, name, value, serial);
+    int (*orig__system_property_get)(const char *key, char *value);
+    int my__system_property_get(const char *key, char *value){
+        int res = orig__system_property_get(key, value);
+        auto prop = Config::Properties::Find(key);
+        if(UNLIKELY(prop)){
+            strcpy(value, prop->value.c_str());
         }
+        return res;
     }
 
-    void (*orig__system_property_read_callback)(const prop_info *pi, callback_func *callback,
-                                                void *cookie);
-
-    void
-    my__system_property_read_callback(const prop_info *pi, callback_func *callback, void *cookie) {
-        saved_callback = callback;
-        orig__system_property_read_callback(pi, my_callback, cookie);
-    }
-*/
     static void InstallHook() {
-        LOGV("Installing Hook");
         int res;
-        res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_find"),
-                        (void *) my__system_property_find, (void **) &orig__system_property_find);
+        if(android::apiLevel >= 26){
+            LOGV("Installing hook for API Level %d",android::apiLevel);
+            res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_find"),
+                            (void *) my__system_property_find, (void **) &orig__system_property_find);
+        }else{
+            LOGV("Installing hook for API Level %d",android::apiLevel);
+            res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_get"),
+                            (void *) my__system_property_get, (void **) &orig__system_property_get);
+        }
         LOGV("Hook return %d", res);
-        /*
-        res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_read_callback"),
-                        (void *) my__system_property_read_callback,
-                        (void **) &orig__system_property_read_callback);
-        LOGV("Hook return %d", res);
-         */
     }
 }
 
@@ -377,6 +372,8 @@ static void onModuleLoaded() {
     // __attribute__((constructor)) or constructors of static variables,
     // or the "hide" will cause SIGSEGV
     Config::Load();
+    int al = android::GetApiLevel();
+    LOGV("API Level detected as %d",al);
 }
 
 

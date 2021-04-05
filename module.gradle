@@ -21,8 +21,8 @@ ext {
     magiskModuleId = "riru_mph"
 
     moduleName = "mph"
-    moduleAuthor = "idiot"
-    moduleDescription = "mph by idiot. This modules requires Riru $moduleMinRiruVersionName or above."
-    moduleVersion = "v25.0.0"
-    moduleVersionCode = 25
+    moduleAuthor = "eebssk1"
+    moduleDescription = "Hook system prop function with dobby to simulate miui for MiPushFOSS"
+    moduleVersion = "v25.1.0"
+    moduleVersionCode = 26
 }
