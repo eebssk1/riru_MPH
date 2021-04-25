@@ -133,20 +133,23 @@ namespace Config {
 namespace Hook {
 
     struct prop_info_compat {
-        char name[128];
+        char *name;
         unsigned volatile serial;
-        char value[PROP_VALUE_MAX];
+        char *value;
     } prop_info_compat;
 
 
     prop_info *(*orig__system_property_find)(const char *name);
 
     prop_info *my__system_property_find(const char *name) {
-        char mname[128] = {0};
+        int psz = strlen(name) + 1;
+        char mname[psz];
         strcpy(mname,name);
         auto prop = Config::Properties::Find(mname);
         if(UNLIKELY(prop)){
             auto *mpi = (struct prop_info_compat *)malloc(sizeof(prop_info_compat));
+            mpi->name = (char *)malloc(psz);
+            mpi->value = (char *)malloc(prop->value.length() + 1);
             strcpy(mpi->name,mname);
             strcpy(mpi->value,prop->value.c_str());
             mpi->serial = prop->ser;
@@ -171,11 +174,11 @@ namespace Hook {
         int res;
         if(android::apiLevel >= 26){
             LOGV("Installing hook for API Level %d",android::apiLevel);
-            res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_find"),
+            res = DobbyHook((void *)__system_property_find,
                             (void *) my__system_property_find, (void **) &orig__system_property_find);
         }else{
             LOGV("Installing hook for API Level %d",android::apiLevel);
-            res = DobbyHook(DobbySymbolResolver("libc.so", "__system_property_get"),
+            res = DobbyHook((void *)__system_property_get,
                             (void *) my__system_property_get, (void **) &orig__system_property_get);
         }
         LOGV("Hook return %d", res);
@@ -194,18 +197,15 @@ static int shouldSkipUid(int uid) {
     return false;
 }
 
-static char saved_package_name[256] = {0};
+static char *saved_package_name;
 static int saved_uid;
-
-#ifdef DEBUG
-static char saved_process_name[256] = {0};
-#endif
 
 static void appProcessPre(JNIEnv *env, jint *uid, jstring *jNiceName, jstring *jAppDataDir) {
 
     saved_uid = *uid;
 
 #ifdef DEBUG
+static char saved_process_name[256];
     memset(saved_process_name, 0, 256);
 
     if (*jNiceName) {
@@ -213,29 +213,23 @@ static void appProcessPre(JNIEnv *env, jint *uid, jstring *jNiceName, jstring *j
     }
 #endif
 
-    memset(saved_package_name, 0, 256);
 
     if (*jAppDataDir) {
         auto appDataDir = ScopedUtfChars(env, *jAppDataDir).c_str();
-        int user = 0;
+        if(LIKELY((strstr(appDataDir,"/data") || strstr(appDataDir,"/mnt/expand")))) {
+            const char *pkg = strrchr(appDataDir,'/');
+            if(LIKELY(pkg != nullptr)){
+                saved_package_name = (char *)malloc(strlen(pkg)-1);
+                strcpy(saved_package_name,++pkg);
+                }else{
+                    saved_package_name = (char *)malloc(1);
+                    *saved_package_name = '\0';
+                    }
+        }else{
+            saved_package_name = (char *)malloc(1);
+            *saved_package_name = '\0';
+        }
 
-        // /data/user/<user_id>/<package>
-        if (sscanf(appDataDir, "/data/%*[^/]/%d/%s", &user, saved_package_name) == 2)
-            goto found;
-
-        // /mnt/expand/<id>/user/<user_id>/<package>
-        if (sscanf(appDataDir, "/mnt/expand/%*[^/]/%*[^/]/%d/%s", &user, saved_package_name) ==
-            2)
-            goto found;
-
-        // /data/data/<package>
-        if (sscanf(appDataDir, "/data/%*[^/]/%s", saved_package_name) == 1)
-            goto found;
-
-        // nothing found
-        saved_package_name[0] = '\0';
-
-        found:;
     }
 }
 

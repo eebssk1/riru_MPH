@@ -3,6 +3,8 @@ apply from: file(rootProject.file('module.gradle'))
 
 android {
     compileSdkVersion rootProject.ext.targetSdkVersion
+    ndkVersion "22.1.7171670"
+    buildToolsVersion "29.0.3"
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -22,7 +24,7 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.10.2"
+            version "3.18.1"
         }
     }
 }
