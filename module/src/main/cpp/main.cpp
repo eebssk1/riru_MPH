@@ -138,16 +138,23 @@ namespace Hook {
         char *value;
     } prop_info_compat;
 
+    struct prop_info_compat *mpi;
 
     prop_info *(*orig__system_property_find)(const char *name);
 
     prop_info *my__system_property_find(const char *name) {
+        if(UNLIKELY(mpi)){
+            free(mpi->name);
+            free(mpi->value);
+            free(mpi);
+            mpi = NULL;
+        }
         int psz = strlen(name) + 1;
         char mname[psz];
         strcpy(mname,name);
         auto prop = Config::Properties::Find(mname);
         if(UNLIKELY(prop)){
-            auto *mpi = (struct prop_info_compat *)malloc(sizeof(prop_info_compat));
+            mpi = (struct prop_info_compat *)malloc(sizeof(prop_info_compat));
             mpi->name = (char *)malloc(psz);
             mpi->value = (char *)malloc(prop->value.length() + 1);
             strcpy(mpi->name,mname);
@@ -203,6 +210,10 @@ static int saved_uid;
 static void appProcessPre(JNIEnv *env, jint *uid, jstring *jNiceName, jstring *jAppDataDir) {
 
     saved_uid = *uid;
+    if(LIKELY(saved_package_name)){
+        free(saved_package_name);
+        saved_package_name=NULL;
+    };
 
 #ifdef DEBUG
 static char saved_process_name[256];
