@@ -22,10 +22,10 @@ namespace android {
     static int apiLevel = 0;
 
     static int GetApiLevel() {
-        if (apiLevel > 0) return apiLevel;
+        if (UNLIKELY(apiLevel > 0)) return apiLevel;
 
         char buf[PROP_VALUE_MAX + 1];
-        if (__system_property_get("ro.build.version.sdk", buf) > 0)
+        if (LIKELY(__system_property_get("ro.build.version.sdk", buf)) > 0)
             apiLevel = strtol(buf,nullptr,10);
         if(UNLIKELY(apiLevel == 0))
             //Assume android oreo+ if any problem
@@ -90,19 +90,19 @@ namespace Config {
     }
 
     void Properties::Put(const char *name, const char *value) {
-        if (!name) return;
+        if (UNLIKELY(!name)) return;
         auto prop = Find(name);
         delete prop;
         props[name] = new Property(name, value ? value : "",serm++);
     }
 
     bool Packages::Find(const char *name) {
-        if (!name) return false;
+        if (UNLIKELY(!name)) return false;
         return std::find(packages.begin(), packages.end(), name) != packages.end();
     }
 
     void Packages::Add(const char *name) {
-        if (!name) return;
+        if (UNLIKELY(!name)) return;
         packages.emplace_back(name);
     }
 
@@ -123,9 +123,9 @@ namespace Config {
             Packages::Add(name);
             LOGV("add package %s", name);
         });
-        if (packages.empty())
+        if (UNLIKELY(packages.empty()))
             LOGI("hook target package list is empty");
-        if (props.empty())
+        if (UNLIKELY(props.empty()))
             LOGI("hook prop list is empty");
         LOGI("hook target package and prop list loadded");
     }
@@ -133,36 +133,38 @@ namespace Config {
 namespace Hook {
 
     struct prop_info_compat {
-        char *name;
-        unsigned volatile serial;
-        char *value;
+        char name[128];
+        unsigned serial;
+        char value[PROP_VALUE_MAX];
     } prop_info_compat;
 
-    struct prop_info_compat *mpi;
+    static std::map<std::string, struct prop_info_compat *> mprop;
+    static void prepare() {
+        LOGV("preparing fake prop memory..");
+        for (const auto& prop : Config::props) {
+            static struct prop_info_compat *ps = (struct prop_info_compat *)malloc(sizeof(struct prop_info_compat));
+            strcpy(ps->name,prop.first.c_str());
+            strcpy(ps->value,prop.second->value.c_str());
+            ps->serial = prop.second->ser;
+            mprop[prop.first.c_str()] = ps;
+            LOGV("Created prop struct in mem for %s",ps->name);
+        }
+    }
 
     prop_info *(*orig__system_property_find)(const char *name);
 
     prop_info *my__system_property_find(const char *name) {
-        if(UNLIKELY(mpi)){
-            free(mpi->name);
-            free(mpi->value);
-            free(mpi);
-            mpi = NULL;
-        }
         int psz = strlen(name) + 1;
         char mname[psz];
+        memset(mname,0,psz);
         strcpy(mname,name);
         auto prop = Config::Properties::Find(mname);
         if(UNLIKELY(prop)){
-            mpi = (struct prop_info_compat *)malloc(sizeof(prop_info_compat));
-            mpi->name = (char *)malloc(psz);
-            mpi->value = (char *)malloc(prop->value.length() + 1);
-            strcpy(mpi->name,mname);
-            strcpy(mpi->value,prop->value.c_str());
-            mpi->serial = prop->ser;
-            return reinterpret_cast<prop_info *>(mpi);
-        }
-        else{
+            auto it = mprop.find(mname);
+            if(it != mprop.end())
+                return reinterpret_cast<prop_info *>(it->second);
+            return orig__system_property_find(name);
+        }else{
             return orig__system_property_find(name);
         }
     }
@@ -179,7 +181,7 @@ namespace Hook {
 
     static void InstallHook() {
         int res;
-        if(android::apiLevel >= 26){
+        if(LIKELY(android::apiLevel >= 26)){
             LOGV("Installing hook for API Level %d",android::apiLevel);
             res = DobbyHook((void *)__system_property_find,
                             (void *) my__system_property_find, (void **) &orig__system_property_find);
@@ -204,19 +206,18 @@ static int shouldSkipUid(int uid) {
     return false;
 }
 
-static char *saved_package_name;
+static char saved_package_name[256] = {0};
 static int saved_uid;
+
+#ifdef DEBUG
+static char saved_process_name[256] = {0};
+#endif
 
 static void appProcessPre(JNIEnv *env, jint *uid, jstring *jNiceName, jstring *jAppDataDir) {
 
     saved_uid = *uid;
-    if(LIKELY(saved_package_name)){
-        free(saved_package_name);
-        saved_package_name=NULL;
-    };
 
 #ifdef DEBUG
-static char saved_process_name[256];
     memset(saved_process_name, 0, 256);
 
     if (*jNiceName) {
@@ -230,15 +231,12 @@ static char saved_process_name[256];
         if(LIKELY((strstr(appDataDir,"/data") || strstr(appDataDir,"/mnt/expand")))) {
             const char *pkg = strrchr(appDataDir,'/');
             if(LIKELY(pkg != nullptr)){
-                saved_package_name = (char *)malloc(strlen(pkg)-1);
                 strcpy(saved_package_name,++pkg);
                 }else{
-                    saved_package_name = (char *)malloc(1);
-                    *saved_package_name = '\0';
+                    saved_package_name[0] = '\0';
                     }
         }else{
-            saved_package_name = (char *)malloc(1);
-            *saved_package_name = '\0';
+            saved_package_name[0] = '\0';
         }
 
     }
@@ -290,6 +288,7 @@ static void appProcessPost(
 
     if (UNLIKELY(Config::Packages::Find(package_name))) {
         LOGI("install hook for %d:%s", uid / 100000, package_name);
+        Hook::prepare();
         injectBuild(env);
         Hook::InstallHook();
     } else {
