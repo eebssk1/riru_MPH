@@ -13,6 +13,7 @@
 #include <dirent.h>
 #include <nativehelper/scoped_utf_chars.h>
 #include "dobby.h"
+#include <unordered_set>
 
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define LIKELY(x) __builtin_expect(!!(x), 1)
@@ -77,7 +78,7 @@ namespace Config {
 #define PACKAGES_PATH CONFIG_PATH "/packages"
 
     static std::map<std::string, Property *> props;
-    static std::vector<std::string> packages;
+    static std::unordered_set <std::string> packages ;
     static int serm = 10086;
 
     Property *Properties::Find(const char *name) {
@@ -98,12 +99,12 @@ namespace Config {
 
     bool Packages::Find(const char *name) {
         if (UNLIKELY(!name)) return false;
-        return std::find(packages.begin(), packages.end(), name) != packages.end();
+        return packages.find(name) != packages.end();
     }
 
     void Packages::Add(const char *name) {
         if (UNLIKELY(!name)) return;
-        packages.emplace_back(name);
+        packages.insert(name);
     }
 
     static void Load() {
