@@ -27,8 +27,8 @@ namespace android {
 
         char buf[PROP_VALUE_MAX + 1];
         if (LIKELY(__system_property_get("ro.build.version.sdk", buf)) > 0)
-            apiLevel = strtol(buf,nullptr,10);
-        if(UNLIKELY(apiLevel == 0))
+            apiLevel = strtol(buf, nullptr, 10);
+        if (UNLIKELY(apiLevel == 0))
             //Assume android oreo+ if any problem
             apiLevel = 26;
 
@@ -59,7 +59,8 @@ namespace Config {
         std::string value;
         unsigned ser;
 
-        Property(const char *name, const char *value,unsigned ser) : name(name), value(value), ser(ser) {}
+        Property(const char *name, const char *value, unsigned ser) : name(name), value(value),
+                                                                      ser(ser) {}
     };
 
     namespace Properties {
@@ -78,7 +79,8 @@ namespace Config {
 #define PACKAGES_PATH CONFIG_PATH "/packages"
 
     static std::map<std::string, Property *> props;
-    static std::unordered_set <std::string> packages ;
+    static std::unordered_set<std::string> packages;
+    //Just a meaningless number
     static int serm = 10086;
 
     Property *Properties::Find(const char *name) {
@@ -94,7 +96,7 @@ namespace Config {
         if (UNLIKELY(!name)) return;
         auto prop = Find(name);
         delete prop;
-        props[name] = new Property(name, value ? value : "",serm++);
+        props[name] = new Property(name, value ? value : "", serm++);
     }
 
     bool Packages::Find(const char *name) {
@@ -128,9 +130,10 @@ namespace Config {
             LOGI("hook target package list is empty");
         if (UNLIKELY(props.empty()))
             LOGI("hook prop list is empty");
-        LOGI("hook target package and prop list loadded");
+        LOGI("hook target package and prop list loaded");
     }
 }
+
 namespace Hook {
 
     struct prop_info_compat {
@@ -138,17 +141,24 @@ namespace Hook {
         unsigned serial;
         char value[PROP_VALUE_MAX];
     } prop_info_compat;
+    struct prop_info {
+        std::atomic_uint_least32_t serial;
+        char value[PROP_VALUE_MAX];
+        char name[0];
+    };
 
     static std::map<std::string, struct prop_info_compat *> mprop;
+
     static void prepare() {
         LOGV("preparing fake prop memory..");
-        for (const auto& prop : Config::props) {
-            static struct prop_info_compat *ps = (struct prop_info_compat *)malloc(sizeof(struct prop_info_compat));
-            strcpy(ps->name,prop.first.c_str());
-            strcpy(ps->value,prop.second->value.c_str());
+        for (const auto &prop : Config::props) {
+            static auto *ps = (struct prop_info_compat *) malloc(
+                    sizeof(struct prop_info_compat));
+            strcpy(ps->name, prop.first.c_str());
+            strcpy(ps->value, prop.second->value.c_str());
             ps->serial = prop.second->ser;
             mprop[prop.first.c_str()] = ps;
-            LOGV("Created prop struct in mem for %s",ps->name);
+            LOGV("Created prop struct in mem for %s", ps->name);
         }
     }
 
@@ -157,24 +167,35 @@ namespace Hook {
     prop_info *my__system_property_find(const char *name) {
         int psz = strlen(name) + 1;
         char mname[psz];
-        memset(mname,0,psz);
-        strcpy(mname,name);
+        memset(mname, 0, psz);
+        strcpy(mname, name);
         auto prop = Config::Properties::Find(mname);
-        if(UNLIKELY(prop)){
+        if (UNLIKELY(prop)) {
             auto it = mprop.find(mname);
-            if(it != mprop.end())
+            if (it != mprop.end())
                 return reinterpret_cast<prop_info *>(it->second);
             return orig__system_property_find(name);
-        }else{
+        } else {
             return orig__system_property_find(name);
         }
     }
 
+    using callback_func = void(void *cookie, const char *name, const char *value, uint32_t serial);
+
+    void (*orig__system_property_read_callback)(const prop_info *pi, callback_func *callback,
+                                                void *cookie);
+
+    void
+    my__system_property_read_callback(const prop_info *pi, callback_func *callback, void *cookie) {
+        callback(cookie, pi->name, pi->value, pi->serial);
+    }
+
     int (*orig__system_property_get)(const char *key, char *value);
-    int my__system_property_get(const char *key, char *value){
+
+    int my__system_property_get(const char *key, char *value) {
         int res = orig__system_property_get(key, value);
         auto prop = Config::Properties::Find(key);
-        if(UNLIKELY(prop)){
+        if (UNLIKELY(prop)) {
             strcpy(value, prop->value.c_str());
         }
         return res;
@@ -182,14 +203,23 @@ namespace Hook {
 
     static void InstallHook() {
         int res;
-        if(LIKELY(android::apiLevel >= 26)){
-            LOGV("Installing hook for API Level %d",android::apiLevel);
-            res = DobbyHook((void *)__system_property_find,
-                            (void *) my__system_property_find, (void **) &orig__system_property_find);
-        }else{
-            LOGV("Installing hook for API Level %d",android::apiLevel);
-            res = DobbyHook((void *)__system_property_get,
-                            (void *) my__system_property_get, (void **) &orig__system_property_get);
+        if (LIKELY(android::apiLevel >= 30)) {
+            LOGV("Installing hook for API Level %d", android::apiLevel);
+            res = DobbyHook((void *) __system_property_read_callback,
+                            (void *) my__system_property_read_callback,
+                            (void **) &orig__system_property_read_callback);
+            LOGV("Hook return %d", res);
+        }
+        if (LIKELY(android::apiLevel >= 26)) {
+            LOGV("Installing hook for API Level %d", android::apiLevel);
+            res = DobbyHook((void *) __system_property_find,
+                            (void *) my__system_property_find,
+                            (void **) &orig__system_property_find);
+        } else {
+            LOGV("Installing hook for API Level %d", android::apiLevel);
+            res = DobbyHook((void *) __system_property_get,
+                            (void *) my__system_property_get,
+                            (void **) &orig__system_property_get);
         }
         LOGV("Hook return %d", res);
     }
@@ -229,14 +259,14 @@ static void appProcessPre(JNIEnv *env, jint *uid, jstring *jNiceName, jstring *j
 
     if (*jAppDataDir) {
         auto appDataDir = ScopedUtfChars(env, *jAppDataDir).c_str();
-        if(LIKELY((strstr(appDataDir,"/data") || strstr(appDataDir,"/mnt/expand")))) {
-            const char *pkg = strrchr(appDataDir,'/');
-            if(LIKELY(pkg != nullptr)){
-                strcpy(saved_package_name,++pkg);
-                }else{
-                    saved_package_name[0] = '\0';
-                    }
-        }else{
+        if (LIKELY((strstr(appDataDir, "/data") || strstr(appDataDir, "/mnt/expand")))) {
+            const char *pkg = strrchr(appDataDir, '/');
+            if (LIKELY(pkg != nullptr)) {
+                strcpy(saved_package_name, ++pkg);
+            } else {
+                saved_package_name[0] = '\0';
+            }
+        } else {
             saved_package_name[0] = '\0';
         }
 
@@ -378,7 +408,7 @@ static void onModuleLoaded() {
     // or the "hide" will cause SIGSEGV
     Config::Load();
     int al = android::GetApiLevel();
-    LOGV("API Level detected as %d",al);
+    LOGV("API Level detected as %d", al);
 }
 
 
