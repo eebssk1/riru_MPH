@@ -23,14 +23,14 @@ namespace android {
     static int apiLevel = 0;
 
     static int GetApiLevel() {
-        if (UNLIKELY(apiLevel > 0)) return apiLevel;
+        if (LIKELY(apiLevel > 0)) return apiLevel;
 
         char buf[PROP_VALUE_MAX + 1];
         if (LIKELY(__system_property_get("ro.build.version.sdk", buf)) > 0)
             apiLevel = strtol(buf, nullptr, 10);
         if (UNLIKELY(apiLevel == 0))
-            //Assume android oreo+ if any problem
-            apiLevel = 26;
+            //Assume android 11 if any problem
+            apiLevel = 30;
 
         return apiLevel;
     }
@@ -273,45 +273,6 @@ static void appProcessPre(JNIEnv *env, jint *uid, jstring *jNiceName, jstring *j
     }
 }
 
-void injectBuild(JNIEnv *env) {
-    if (UNLIKELY(env == nullptr)) {
-        LOGW("failed to inject android.os.Build for %s due to env is null", saved_package_name);
-        return;
-    }
-    LOGI("inject android.os.Build for %s ", saved_package_name);
-
-    jclass build_class = env->FindClass("android/os/Build");
-    if (UNLIKELY(build_class == nullptr)) {
-        LOGW("failed to inject android.os.Build for %s due to build is null",
-             saved_package_name);
-        return;
-    }
-
-    jstring new_str = env->NewStringUTF("Xiaomi");
-
-    jfieldID brand_id = env->GetStaticFieldID(build_class, "BRAND", "Ljava/lang/String;");
-    if (UNLIKELY(brand_id != nullptr)) {
-        env->SetStaticObjectField(build_class, brand_id, new_str);
-    }
-
-    jfieldID manufacturer_id = env->GetStaticFieldID(build_class, "MANUFACTURER",
-                                                     "Ljava/lang/String;");
-    if (LIKELY(manufacturer_id != nullptr)) {
-        env->SetStaticObjectField(build_class, manufacturer_id, new_str);
-    }
-
-    jfieldID product_id = env->GetStaticFieldID(build_class, "PRODUCT", "Ljava/lang/String;");
-    if (UNLIKELY(product_id != nullptr)) {
-        env->SetStaticObjectField(build_class, product_id, new_str);
-    }
-
-    if (UNLIKELY(env->ExceptionCheck())) {
-        env->ExceptionClear();
-    }
-
-    env->DeleteLocalRef(new_str);
-}
-
 static void appProcessPost(
         JNIEnv *env, const char *from, const char *package_name, jint uid) {
 
@@ -320,7 +281,6 @@ static void appProcessPost(
     if (UNLIKELY(Config::Packages::Find(package_name))) {
         LOGI("install hook for %d:%s", uid / 100000, package_name);
         Hook::prepare();
-        injectBuild(env);
         Hook::InstallHook();
     } else {
         riru_set_unload_allowed(true);
