@@ -57,9 +57,9 @@ namespace Config {
     struct Property {
         std::string name;
         std::string value;
-        unsigned ser;
+        int ser;
 
-        Property(const char *name, const char *value, unsigned ser) : name(name), value(value),
+        Property(const char *name, const char *value, int ser) : name(name), value(value),
                                                                       ser(ser) {}
     };
 
@@ -67,6 +67,7 @@ namespace Config {
         static Property *Find(const char *name);
 
         static void Put(const char *name, const char *value);
+
     }
     namespace Packages {
         static bool Find(const char *name);
@@ -137,9 +138,9 @@ namespace Config {
 namespace Hook {
 
     struct prop_info_compat {
-        char name[128];
-        unsigned serial;
+        std::atomic_uint_least32_t serial;
         char value[PROP_VALUE_MAX];
+        char name[128];
     } prop_info_compat;
     struct prop_info {
         std::atomic_uint_least32_t serial;
@@ -156,7 +157,7 @@ namespace Hook {
                     sizeof(struct prop_info_compat));
             strcpy(ps->name, prop.first.c_str());
             strcpy(ps->value, prop.second->value.c_str());
-            ps->serial = prop.second->ser;
+            ps->serial.store(prop.second->ser,std::memory_order_relaxed);
             mprop[prop.first.c_str()] = ps;
             LOGV("Created prop struct in mem for %s", ps->name);
         }
@@ -189,7 +190,8 @@ namespace Hook {
     my__system_property_read_callback(const prop_info *pi, callback_func *callback, void *cookie) {
         if(UNLIKELY(Config::Properties::Find(pi->name)))
             return callback(cookie, pi->name, pi->value, pi->serial);
-        return orig__system_property_read_callback(pi,callback,cookie);
+        return orig__system_property_read_callback(pi, callback, cookie);
+
     }
 
     int (*orig__system_property_get)(const char *key, char *value);
