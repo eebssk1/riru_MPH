@@ -187,7 +187,9 @@ namespace Hook {
 
     void
     my__system_property_read_callback(const prop_info *pi, callback_func *callback, void *cookie) {
-        callback(cookie, pi->name, pi->value, pi->serial);
+        if(UNLIKELY(Config::Properties::Find(pi->name)))
+            return callback(cookie, pi->name, pi->value, pi->serial);
+        return orig__system_property_read_callback(pi,callback,cookie);
     }
 
     int (*orig__system_property_get)(const char *key, char *value);
