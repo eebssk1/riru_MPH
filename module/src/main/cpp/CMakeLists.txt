@@ -26,7 +26,7 @@ set(CXX_FLAGS "${CXX_FLAGS} -fno-exceptions -fno-rtti")
 
 if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(C_FLAGS "${C_FLAGS} -fvisibility=hidden -fvisibility-inlines-hidden -flto")
-    set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,-exclude-libs,ALL -Wl,--gc-sections -Wl,--strip-all -Wl,--icf=safe -Wl,-O2")
+    set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,-exclude-libs,ALL -Wl,--gc-sections -Wl,--strip-all -Wl,--icf=safe -Wl,-O3")
 else ()
     set(C_FLAGS "${C_FLAGS} -O0")
 endif ()
@@ -45,4 +45,6 @@ add_library(${MODULE_NAME} SHARED main.cpp)
 target_link_libraries(${MODULE_NAME} log riru::riru nativehelper::nativehelper_header_only dobby android)
 set_target_properties(${MODULE_NAME} PROPERTIES LINK_FLAGS_RELEASE "-s -X")
 target_compile_options(${MODULE_NAME}
-        PRIVATE "$<$<CONFIG:RELEASE>:-Oz;-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=1;-fno-stack-protector>")
+        PRIVATE "$<$<CONFIG:RELEASE>:-Oz>")
+target_compile_options(${MODULE_NAME}
+        PUBLIC "$<$<CONFIG:RELEASE>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=1;-fno-stack-protector>")
