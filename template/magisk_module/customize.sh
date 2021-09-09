@@ -84,7 +84,7 @@ set_perm_recursive "$MODPATH" 0 0 0755 0644
 
 CONFIG_PATH="/data/misc/mph/config"
 
-if [ !-d /data/misc/mph ]
+if [ ! -d /data/misc/mph ]
 then
   rm -rf /data/misc/mph
   mkdir /data/misc/mph
