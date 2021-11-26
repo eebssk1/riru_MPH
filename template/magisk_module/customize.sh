@@ -131,7 +131,15 @@ if [ ! -d "$CONFIG_PATH/packages" ]; then
     touch "$CONFIG_PATH/packages/cool.dingstock.mobile"
     touch "$CONFIG_PATH/packages/me.ele"
     touch "$CONFIG_PATH/packages/org.xinkb.blackboard.android"
+    touch "$CONFIG_PATH/packages/com.jingdong.app.mall"
+    touch "$CONFIG_PATH/packages/com.tmri.app.main"
+    touch "$CONFIG_PATH/packages/com.chinaworld.main"
+    touch "$CONFIG_PATH/packages/com.max.xiaoheihe"
+    touch "$CONFIG_PATH/packages/tv.danmaku.bili"
+    touch "$CONFIG_PATH/packages/cmb.pb"
 fi
 
 set_perm_recursive /data/misc/mph 0 0 0755 0644
 chcon -R u:object_r:magisk_file:s0 /data/misc/mph
+
+ui_print "! Reboot is needed to apply config changes. !"

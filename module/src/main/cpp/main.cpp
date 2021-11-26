@@ -81,8 +81,6 @@ namespace Config {
 
     static std::map<std::string, Property *> props;
     static std::unordered_set<std::string> packages;
-    //Just a meaningless number
-    static int serm = 10086;
 
     Property *Properties::Find(const char *name) {
         if (UNLIKELY(!name)) return nullptr;
@@ -97,7 +95,7 @@ namespace Config {
         if (UNLIKELY(!name)) return;
         auto prop = Find(name);
         delete prop;
-        props[name] = new Property(name, value ? value : "", serm++);
+        props[name] = new Property(name, value ? value : "", strlen(value)<<24);
     }
 
     bool Packages::Find(const char *name) {
@@ -110,6 +108,18 @@ namespace Config {
         packages.insert(name);
     }
 
+    inline bool rmnewline(char *str) {
+        bool hasnl = false;
+        int size = strlen(str);
+        for (int tmp = 0; tmp < size; tmp++) {
+            if (str[tmp] == '\n') {
+                str[tmp] = 0;
+                hasnl = true;
+            }
+        }
+        return hasnl;
+    }
+
     static void Load() {
         foreach_dir(PROPS_PATH, [](int dirfd, struct dirent *entry) {
             auto name = entry->d_name;
@@ -117,6 +127,8 @@ namespace Config {
             if (fd == -1) return;
             char buf[PROP_VALUE_MAX]{0};
             if (LIKELY(read(fd, buf, PROP_VALUE_MAX)) >= 0) {
+                if(UNLIKELY(rmnewline(buf)))
+                    LOGV("Detected newline in prop %s", name);
                 Properties::Put(name, buf);
                 LOGV("add prop %s as %s", name, buf);
             }

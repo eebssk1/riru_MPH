@@ -45,6 +45,6 @@ add_library(${MODULE_NAME} SHARED main.cpp)
 target_link_libraries(${MODULE_NAME} log riru::riru nativehelper::nativehelper_header_only dobby android)
 set_target_properties(${MODULE_NAME} PROPERTIES LINK_FLAGS_RELEASE "-s -X")
 target_compile_options(${MODULE_NAME}
-        PRIVATE "$<$<CONFIG:RELEASE>:-Oz>")
+        PRIVATE "$<$<CONFIG:RELEASE>:-Os>")
 target_compile_options(${MODULE_NAME}
         PUBLIC "$<$<CONFIG:RELEASE>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=1;-fno-stack-protector>")

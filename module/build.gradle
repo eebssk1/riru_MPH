@@ -142,7 +142,7 @@ afterEvaluate {
             archiveName zipName
             destinationDir outDir
         }
-
+/*
         task("push${variantCapped}", type: Exec) {
             dependsOn("assemble${variantCapped}")
             workingDir outDir
@@ -176,7 +176,7 @@ afterEvaluate {
                 commandLine commands
             }
         }
-
+*/
         variant.assembleProvider.get().finalizedBy("zip${variantCapped}")
     }
 }
