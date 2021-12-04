@@ -14,6 +14,7 @@
 #include <nativehelper/scoped_utf_chars.h>
 #include "dobby.h"
 #include <unordered_set>
+#include <string.h>
 
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define LIKELY(x) __builtin_expect(!!(x), 1)
