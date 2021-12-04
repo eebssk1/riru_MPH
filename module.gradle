@@ -23,6 +23,6 @@ ext {
     moduleName = "mph"
     moduleAuthor = "eebssk1"
     moduleDescription = "Hook system prop function with dobby to simulate miui for MiPushFOSS"
-    moduleVersion = "v25.6.0"
-    moduleVersionCode = 37
+    moduleVersion = "v25.7.0"
+    moduleVersionCode = 38
 }

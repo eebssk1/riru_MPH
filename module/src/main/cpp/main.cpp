@@ -22,7 +22,7 @@
 namespace android {
 
     static int apiLevel = 0;
-
+    static bool prefer_system = false;
     static int GetApiLevel() {
         if (LIKELY(apiLevel > 0)) return apiLevel;
 
@@ -38,6 +38,7 @@ namespace android {
 }
 
 namespace Config {
+    
     static int foreach_dir(const char *path, void(*callback)(int, struct dirent *)) {
         DIR *dir;
         struct dirent *entry;
@@ -124,6 +125,10 @@ namespace Config {
     static void Load() {
         foreach_dir(PROPS_PATH, [](int dirfd, struct dirent *entry) {
             auto name = entry->d_name;
+            if(LIKELY(!strcmp(name,"prefer_system"))) {
+                android::prefer_system = true;
+                return;
+            }
             int fd = openat(dirfd, name, O_RDONLY);
             if (fd == -1) return;
             char buf[PROP_VALUE_MAX]{0};
@@ -162,6 +167,7 @@ namespace Hook {
     };
 
     static std::map<std::string, struct prop_info_compat *> mprop;
+    static std::unordered_set<std::string> sys_aval_props;
 
     static void prepare() {
         LOGV("preparing fake prop memory..");
@@ -184,13 +190,20 @@ namespace Hook {
         memset(mname, 0, psz);
         strcpy(mname, name);
         auto prop = Config::Properties::Find(mname);
+        prop_info *sysprop = orig__system_property_find(name);
         if (UNLIKELY(prop)) {
             auto it = mprop.find(mname);
-            if (it != mprop.end())
+            if (it != mprop.end()) {
+                if(UNLIKELY(android::prefer_system == true && sysprop)) {
+                    if(UNLIKELY(sys_aval_props.find(mname)==sys_aval_props.end())) sys_aval_props.insert(mname);
+                    return sysprop;
+                } else {
+                    if(android::prefer_system == true && sys_aval_props.find(mname)!=sys_aval_props.end()) sys_aval_props.erase(mname);
+                }
+            }
                 return reinterpret_cast<prop_info *>(it->second);
-            return orig__system_property_find(name);
         } else {
-            return orig__system_property_find(name);
+            return sysprop;
         }
     }
 
@@ -201,7 +214,7 @@ namespace Hook {
 
     void
     my__system_property_read_callback(const prop_info *pi, callback_func *callback, void *cookie) {
-        if(UNLIKELY(Config::Properties::Find(pi->name)))
+        if(UNLIKELY(Config::Properties::Find(pi->name) && !(android::prefer_system && sys_aval_props.find(pi->name)!=sys_aval_props.end())))
             return callback(cookie, pi->name, pi->value, pi->serial);
         return orig__system_property_read_callback(pi, callback, cookie);
 

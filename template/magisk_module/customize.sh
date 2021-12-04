@@ -106,6 +106,9 @@ fi
 if [ ! -d "$CONFIG_PATH/packages" ]; then
     ui_print "- Creating default configuration (2)"
     mkdir -p "$CONFIG_PATH/packages"
+    
+    touch "$CONFIG_PATH/packages/prefer_system"
+    
     touch "$CONFIG_PATH/packages/cmb.pb"
     touch "$CONFIG_PATH/packages/cn.adidas.app"
     touch "$CONFIG_PATH/packages/com.autonavi.minimap"
