@@ -31,6 +31,9 @@ android {
 
 repositories {
     mavenCentral()
+    flatDir {
+      dirs 'libs'
+    }
 }
 
 dependencies {
@@ -44,6 +47,7 @@ dependencies {
 
     implementation 'dev.rikka.ndk:riru:25.0.0'
     implementation 'dev.rikka.ndk.thirdparty:nativehelper:1.0.1'
+    implementation(name:'dobby', ext:'aar')
 }
 
 def magiskDir = file("$outDir/magisk_module")
