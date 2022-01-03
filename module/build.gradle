@@ -45,9 +45,10 @@ dependencies {
     // you may have to add android.prefabVersion=1.1.2 in your gradle.properties.
     // See https://github.com/google/prefab/issues/122
 
-    implementation 'dev.rikka.ndk:riru:25.0.0'
+    implementation 'dev.rikka.ndk:riru:26.0.0'
     implementation 'dev.rikka.ndk.thirdparty:nativehelper:1.0.1'
     implementation(name:'dobby', ext:'aar')
+    implementation(name:'cxx', ext:'aar')
 }
 
 def magiskDir = file("$outDir/magisk_module")

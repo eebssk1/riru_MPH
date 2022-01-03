@@ -40,9 +40,10 @@ set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${LINKER_FLAGS}")
 find_package(riru REQUIRED CONFIG)
 find_package(nativehelper REQUIRED CONFIG)
 find_package(dobby REQUIRED CONFIG)
+find_package(cxx REQUIRED CONFIG)
 
 add_library(${MODULE_NAME} SHARED main.cpp)
-target_link_libraries(${MODULE_NAME} log riru::riru nativehelper::nativehelper_header_only dobby::dobby android)
+target_link_libraries(${MODULE_NAME} log riru::riru nativehelper::nativehelper_header_only dobby::dobby android cxx::cxx)
 set_target_properties(${MODULE_NAME} PROPERTIES LINK_FLAGS_RELEASE "-s -X")
 target_compile_options(${MODULE_NAME}
         PRIVATE "$<$<CONFIG:RELEASE>:-Os>")
